@@ -16,7 +16,7 @@ local ok_move, gm_move     = pcall(require, "hexm.client.debug.gm.gm_commands.gm
 
 -- ========= ALWAYS-ON CHEATS =========
 local player_id = 1
-
+local xp_multiplier = 2  -- Multiplicador de experiencia (cambia este valor para ajustar)
 -- Estados globales
 
 _G.GM_GODMODE = _G.GM_GODMODE or false
@@ -90,20 +90,11 @@ local function toggle_god()
     end
 end
 
-local function add_experience()
-    -- Verificar si la función gm_add_xp existe
-    if ok_player and gm_player then
-        if gm_player.gm_add_xp then
-            -- Usamos el player_id (usualmente es 1 o el ID del jugador)
-            local player_id = 1  -- Suponemos que el jugador tiene ID 1, ajusta si es necesario
-            pcall(gm_player.gm_add_xp, player_id, _G.GM_XP_AMOUNT)  -- Añadir la cantidad de experiencia
-            print("[✔] XP Añadido: " .. _G.GM_XP_AMOUNT)
-        else
-            print("[✘] La función gm_add_xp no está disponible.")
-        end
-    else
-        print("[✘] No se pudo añadir XP. El módulo del jugador no está disponible.")
-    end
+-- Función para añadir experiencia multiplicada
+local function addMultipliedXP(player_id, base_xp)
+    local xp_to_add = base_xp * xp_multiplier  -- Multiplicamos la XP obtenida por el multiplicador
+    print("[✔] XP multiplicada: " .. xp_to_add .. " XP.")
+    gm_add_xp(player_id, xp_to_add)  -- Llamar a la función original para añadir la XP
 end
 
 local function toggle_noclip()
@@ -113,7 +104,6 @@ end
 local function toggle_invisible()
     _G.GM_INVISIBLE = not _G.GM_INVISIBLE
 end
-
 
 -- ===============================
 -- FUNCIONES DE STAMINA
@@ -188,9 +178,11 @@ end)
 row("FOV +", fov_up)
 row("FOV -", fov_down)
 
-local btn_xp = row("XP Multiplier: x" .. _G.GM_XP_MULTIPLIER, function(b)
-    change_xp_multiplier()
-    b:setTitleText("XP Multiplier: x" .. _G.GM_XP_MULTIPLIER)
+-- Crear el botón para modificar el multiplicador de XP
+local btn_xp_multiplier = row("Multiplicador XP: " .. xp_multiplier .. "x", function(b)
+    -- Aumentar el multiplicador cuando se presiona el botón
+    xp_multiplier = xp_multiplier + 1  -- Aumentar el multiplicador (puedes ajustarlo a tu gusto)
+    b:setTitleText("Multiplicador XP: " .. xp_multiplier .. "x")
 end)
 
 local btn_onehit = row("One-hit Kill: OFF", function(b)
@@ -236,5 +228,12 @@ if gm and gm.register_attack_callback then
     gm.register_attack_callback(on_attack)
 end
 
+gm_open_combat_train()  -- Llama a la interfaz gráfica de entrenamiento de combate
+
+-- Llamar a la función para agregar XP multiplicada al jugador
+addMultipliedXP(1, 100)  -- Ejemplo: agregar 100 XP multiplicados por el factor
+
 return
+
+
 
