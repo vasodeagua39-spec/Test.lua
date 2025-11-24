@@ -20,6 +20,7 @@ local player_id = 1
 _G.GM_ONEHIT = _G.GM_ONEHIT or false
 _G.GM_ONEHIT_DELTA = _G.GM_ONEHIT_DELTA or nil
 _G.GM_ORIGINAL_DAMAGE = _G.GM_ORIGINAL_DAMAGE or 30
+_G.GM_STAMINA      = _G.GM_STAMINA or false
 
 local eventOK = 0
 
@@ -151,6 +152,55 @@ local function toggle_one_hit()
     return true
 end
 
+-----------------------------------------------------
+-- STAMINA — REVERSIÓN EXACTA
+-----------------------------------------------------
+local function toggle_stamina()
+
+    -- DESACTIVAR (revertir todo)
+    if _G.GM_STAMINA == true then
+        print("[✔] Stamina infinita OFF — restaurando estado original")
+
+        if ok_combat and gm_combat then
+            -- Restaurar cálculo original (0)
+            pcall(gm_combat.gm_set_sp_calc, 0)
+
+            -- Desbloquear consumo
+            pcall(gm_combat.gm_lock_res_consume, false)
+
+            -- Desactivar buceo infinito
+            pcall(gm_combat.gm_unlimited_dive_resource, false)
+
+            -- Restaurar recursos normales
+            pcall(gm_combat.gm_reset_combat_resource)
+        end
+
+        _G.GM_STAMINA = false
+        return false
+    end
+
+    -----------------------------------------------------
+    -- ACTIVAR (igual que OHK pero versión stamina)
+    -----------------------------------------------------
+    print("[✔] Stamina infinita ON")
+
+    if ok_combat and gm_combat then
+        -- SP no se consume
+        pcall(gm_combat.gm_set_sp_calc, 1)
+
+        -- bloquear consumo interno
+        pcall(gm_combat.gm_lock_res_consume, true)
+
+        -- dive resource infinito (previene drenaje)
+        pcall(gm_combat.gm_unlimited_dive_resource, true)
+
+        -- limpiar recursos (para rellenar barra)
+        pcall(gm_combat.gm_empty_combat_resource)
+    end
+
+    _G.GM_STAMINA = true
+    return true
+end
 
 -- Botones y UI
 local y = 540
@@ -171,6 +221,12 @@ local btn_onehit = row("One-Hit Kill: OFF", function(b)
     b:setTitleText("One-Hit Kill: " .. (state and "ON" or "OFF"))
 end)
 
+local btn_stamina = row("Stamina: OFF", function(b)
+    local state = toggle_stamina()
+    b:setTitleText("Stamina: " .. (state and "ON" or "OFF"))
+end)
+
+
 local btn_close = makeButton("CERRAR MENU", 210, 40)
 bind(btn_close, function()
     panel:removeFromParent()
@@ -179,8 +235,9 @@ end)
 
 btn_god:setTitleText("Godmode: " .. (_G.GM_GODMODE and "ON" or "OFF"))
 btn_onehit:setTitleText("One-Hit Kill: " .. (_G.GM_ONEHIT and "ON" or "OFF"))
-
+btn_stamina:setTitleText("Stamina Infinita: " .. (_G.GM_STAMINA and "ON" or "OFF"))
 return
+
 
 
 
