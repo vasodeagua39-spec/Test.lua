@@ -8,6 +8,17 @@ local function safe_mod(name)
     return nil
 end
 
+local FLAGS_TO_SET = {
+    DEBUG                     = true,
+    DISABLE_ACSDK             = true,
+    ENABLE_DEBUG_PRINT        = true,
+    ENABLE_FORCE_SHOW_GM      = true,
+    FORCE_OPEN_DEBUG_SHORTCUT = true,
+    GM_IS_OPEN_GUIDE          = true,
+    GM_USE_PUBLISH            = true,
+    acsdk_info_has_inited     = false,
+}
+
 local ok_combat, gm_combat = pcall(require, "hexm.client.debug.gm.gm_commands.gm_combat")
 local ok_player, gm_player = pcall(require, "hexm.client.debug.gm.gm_commands.gm_player")
 local ok_move, gm_move     = pcall(require, "hexm.client.debug.gm.gm_commands.gm_move")
@@ -202,6 +213,41 @@ local function toggle_stamina()
     return true
 end
 
+-- Función para forzar el idioma (si existe una opción de configuración)
+local function force_language_to_chinese()
+    local ok, err = pcall(function()
+        local game_settings = package.loaded["hexm.client.settings.language"]  -- Este es solo un ejemplo, ajusta al módulo correcto
+        if not game_settings then
+            error("Módulo de configuración de idioma no cargado")
+        end
+        game_settings.set_language("chinese")  -- Asegúrate de que esta función exista en el módulo
+    end)
+    if ok then
+        print("[✓] Idioma forzado a chino")
+    else
+        print(string.format("[✗] Error al forzar idioma: %s", tostring(err)))
+    end
+end
+
+-- Función para abrir el nuevo menú con el idioma forzado
+local function open_new_menu()
+    force_language_to_chinese()  -- Forzar el idioma antes de abrir el menú
+
+    local ok, err = pcall(function()
+        local gm_combat = package.loaded["hexm.client.debug.gm.gm_commands.gm_combat"]
+        if not gm_combat then
+            error("GM combat module not loaded yet - inject earlier?")
+        end
+        gm_combat.gm_open_combat_train()  -- Llamar a la función para abrir el menú
+    end)
+
+    if ok then
+        print("[✓] Nuevo Menú Abierto correctamente")
+    else
+        print(string.format("[✗] Error al abrir el menú: %s", tostring(err)))
+    end
+end
+
 -- Botones y UI
 local y = 540
 local function row(label, func)
@@ -226,8 +272,12 @@ local btn_stamina = row("Stamina: OFF", function(b)
     b:setTitleText("Stamina: " .. (state and "ON" or "OFF"))
 end)
 
+-- Botón en el menú principal para abrir el nuevo menú
+row("GM menu", function()
+  open_new_menu()  -- Llama a la función para abrir el nuevo menú
+end)
 
-local btn_close = makeButton("CERRAR MENU", 210, 40)
+local btn_close = makeButton("CLOSE MENU", 210, 40)
 bind(btn_close, function()
     panel:removeFromParent()
     _G.GM_MENU = nil
@@ -237,7 +287,6 @@ btn_god:setTitleText("Godmode: " .. (_G.GM_GODMODE and "ON" or "OFF"))
 btn_onehit:setTitleText("One-Hit Kill: " .. (_G.GM_ONEHIT and "ON" or "OFF"))
 btn_stamina:setTitleText("Stamina Infinita: " .. (_G.GM_STAMINA and "ON" or "OFF"))
 return
-
 
 
 
