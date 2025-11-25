@@ -22,6 +22,8 @@ local FLAGS_TO_SET = {
 local ok_combat, gm_combat = pcall(require, "hexm.client.debug.gm.gm_commands.gm_combat")
 local ok_player, gm_player = pcall(require, "hexm.client.debug.gm.gm_commands.gm_player")
 local ok_move, gm_move     = pcall(require, "hexm.client.debug.gm.gm_commands.gm_move")
+local mp = G.main_player
+local interact_misc = portable.import('hexm.common.misc.interact_misc')
 
 if not ok_combat then print("[❌] No se pudo cargar gm_combat") end
 if not ok_move   then print("[❌] No se pudo cargar gm_move") end
@@ -32,6 +34,7 @@ _G.GM_ONEHIT = _G.GM_ONEHIT or false
 _G.GM_ONEHIT_DELTA = _G.GM_ONEHIT_DELTA or nil
 _G.GM_ORIGINAL_DAMAGE = _G.GM_ORIGINAL_DAMAGE or 30
 _G.GM_STAMINA      = _G.GM_STAMINA or false
+_G.GM_INTERACT = _G.GM_INTERACT or false
 
 local eventOK = 0
 
@@ -45,6 +48,8 @@ if _G.GM_MENU then
     _G.GM_MENU:removeFromParent()
     _G.GM_MENU = nil
 end
+
+
 
 local panel = ccui.Layout:create()
 panel:setContentSize(cc.size(420, 600))
@@ -248,6 +253,91 @@ local function open_new_menu()
     end
 end
 
+local function run_interact_collect()
+    print("[✔] Ejecutando Interact Collect...")
+
+    -- Normal resource collection
+    pcall(function() mp:ride_skill_collect_nearby_collections(1500) end)
+
+    local playerPos = mp:get_position()
+    local entities = MEntityManager:GetAOIEntities()
+    local targets = {}
+
+    for i = 1, #entities do
+        local ent = entities[i]
+        local ok, name = pcall(function() return ent:GetName() end)
+        if ok and name and name:find('InteractComEntity') then
+            local ok2, eno = pcall(function() return ent:GetEntityNo() end)
+            local ok3, eid = pcall(function() return ent.entity_id end)
+            if ok2 and ok3 then
+                local luaEnt = G.space:get_entity(eid)
+                if luaEnt then
+                    local ok4, comp = pcall(function() return luaEnt:get_interact_comp(eid) end)
+                    if ok4 and comp and comp.position then
+                        local dx = playerPos.x - comp.position[1]
+                        local dy = playerPos.y - comp.position[2]
+                        local dz = playerPos.z - comp.position[3]
+                        local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+                        local priority = eid:find('ins_entity') and 0 or 1
+                        table.insert(targets, {
+                            entity_no = eno,
+                            entity_id = eid,
+                            luaEnt = luaEnt,
+                            comp = comp,
+                            distance = dist,
+                            priority = priority
+                        })
+                    end
+                end
+            end
+        end
+    end
+
+    table.sort(targets, function(a, b)
+        if a.priority ~= b.priority then return a.priority < b.priority end
+        return a.distance < b.distance
+    end)
+
+    for i = 1, #targets do
+        local t = targets[i]
+        local ways = {}
+        local seen = {}
+
+        local ok_ways, possible = pcall(function()
+            return interact_misc.get_all_possible_active_ways(t.entity_no)
+        end)
+        if ok_ways and possible then
+            for _, w in ipairs(possible) do
+                if not seen[w] then seen[w] = true; table.insert(ways, w) end
+            end
+        end
+
+        local comp_id = nil
+        if t.comp.components then
+            for cid, comp_data in pairs(t.comp.components) do
+                comp_id = cid
+                if comp_data.status_no and not seen[comp_data.status_no] then
+                    seen[comp_data.status_no] = true
+                    table.insert(ways, comp_data.status_no)
+                end
+                if comp_data.config_no and not seen[comp_data.config_no] then
+                    seen[comp_data.config_no] = true
+                    table.insert(ways, comp_data.config_no)
+                end
+            end
+        end
+
+        if #ways > 0 then
+            pcall(function() mp:set_interact_target_id(t.entity_id) end)
+            for _, way in ipairs(ways) do
+                pcall(function() mp:trigger_active_interact(way, t.entity_id, nil, nil, comp_id) end)
+            end
+        end
+    end
+
+    print("[✔] Interact Collect ejecutado.")
+end
+
 -- Botones y UI
 local y = 540
 local function row(label, func)
@@ -277,6 +367,10 @@ row("GM menu", function()
   open_new_menu()  -- Llama a la función para abrir el nuevo menú
 end)
 
+row("Auto-Collect", function()
+    run_interact_collect()
+end)
+
 local btn_close = makeButton("CLOSE MENU", 210, 40)
 bind(btn_close, function()
     panel:removeFromParent()
@@ -287,8 +381,3 @@ btn_god:setTitleText("Godmode: " .. (_G.GM_GODMODE and "ON" or "OFF"))
 btn_onehit:setTitleText("One-Hit Kill: " .. (_G.GM_ONEHIT and "ON" or "OFF"))
 btn_stamina:setTitleText("Stamina Infinita: " .. (_G.GM_STAMINA and "ON" or "OFF"))
 return
-
-
-
-
-
