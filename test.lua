@@ -1,4 +1,4 @@
--- gm_menu_full.lua — Menú GM FINAL (versión con limpieza exhaustiva OHK)
+-- test.lua — Menú GM FINAL (versión con limpieza exhaustiva OHK)
 
 local function safe_mod(name)
     local ok, m = pcall(require, name)
@@ -287,6 +287,7 @@ btn_god:setTitleText("Godmode: " .. (_G.GM_GODMODE and "ON" or "OFF"))
 btn_onehit:setTitleText("One-Hit Kill: " .. (_G.GM_ONEHIT and "ON" or "OFF"))
 btn_stamina:setTitleText("Stamina Infinita: " .. (_G.GM_STAMINA and "ON" or "OFF"))
 return
+
 
 
 
