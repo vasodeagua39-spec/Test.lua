@@ -253,11 +253,35 @@ local function open_new_menu()
     end
 end
 
-local function run_interact_collect()
-    print("[✔] Ejecutando Interact Collect...")
+-- Aquí insertaré el archivo completo con soporte para TODOS los tipos de cofres
+-- Reemplazaré SOLO la lógica de detección para que incluya:
+--  * InteractComEntity
+--  * Chest, Treasure, Box, Loot, Reward, etc
+--  * Cualquier entidad interactuable con nombre relacionado a cofres
 
-    -- Normal resource collection
-    pcall(function() mp:ride_skill_collect_nearby_collections(1500) end)
+local function isChestName(name)
+    if not name then return false end
+    name = name:lower()
+
+    -- Lista extendida de patrones
+    local patterns = {
+        "chest", "treasure", "box", "loot", "reward", "drop",
+        "ins_chest", "ins_treasure", "ins_box", "ins_reward",
+        "interactchest", "interact_treasure", "gacha", "rare_chest"
+    }
+
+    for _, p in ipairs(patterns) do
+        if name:find(p) then return true end
+    end
+
+    return false
+end
+
+-- Función principal de auto-collect con detección universal de cofres
+function run_interact_collect()
+    print("[✔] Auto-Collect: buscando TODO tipo de cofres, cajas y recursos...")
+
+    pcall(function() mp:ride_skill_collect_nearby_collections(2000) end)
 
     local playerPos = mp:get_position()
     local entities = MEntityManager:GetAOIEntities()
@@ -265,28 +289,36 @@ local function run_interact_collect()
 
     for i = 1, #entities do
         local ent = entities[i]
+
         local ok, name = pcall(function() return ent:GetName() end)
-        if ok and name and name:find('InteractComEntity') then
+        if ok and name then
             local ok2, eno = pcall(function() return ent:GetEntityNo() end)
             local ok3, eid = pcall(function() return ent.entity_id end)
+
             if ok2 and ok3 then
-                local luaEnt = G.space:get_entity(eid)
-                if luaEnt then
-                    local ok4, comp = pcall(function() return luaEnt:get_interact_comp(eid) end)
-                    if ok4 and comp and comp.position then
-                        local dx = playerPos.x - comp.position[1]
-                        local dy = playerPos.y - comp.position[2]
-                        local dz = playerPos.z - comp.position[3]
-                        local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
-                        local priority = eid:find('ins_entity') and 0 or 1
-                        table.insert(targets, {
-                            entity_no = eno,
-                            entity_id = eid,
-                            luaEnt = luaEnt,
-                            comp = comp,
-                            distance = dist,
-                            priority = priority
-                        })
+                -- Filtro extendido: InteractComEntity o cofres detectados
+                local isInteract = name:find("InteractComEntity") ~= nil
+                local isChest    = isChestName(name)
+
+                if isInteract or isChest then
+                    local luaEnt = G.space:get_entity(eid)
+                    if luaEnt then
+                        local ok4, comp = pcall(function() return luaEnt:get_interact_comp(eid) end)
+                        if ok4 and comp and comp.position then
+                            local dx = playerPos.x - comp.position[1]
+                            local dy = playerPos.y - comp.position[2]
+                            local dz = playerPos.z - comp.position[3]
+                            local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+
+                            table.insert(targets, {
+                                entity_no = eno,
+                                entity_id = eid,
+                                luaEnt = luaEnt,
+                                comp = comp,
+                                distance = dist,
+                                priority = isChest and 0 or 1 -- Cofres primero
+                            })
+                        end
                     end
                 end
             end
@@ -298,17 +330,20 @@ local function run_interact_collect()
         return a.distance < b.distance
     end)
 
-    for i = 1, #targets do
-        local t = targets[i]
+    for _, t in ipairs(targets) do
         local ways = {}
         local seen = {}
 
         local ok_ways, possible = pcall(function()
             return interact_misc.get_all_possible_active_ways(t.entity_no)
         end)
+
         if ok_ways and possible then
             for _, w in ipairs(possible) do
-                if not seen[w] then seen[w] = true; table.insert(ways, w) end
+                if not seen[w] then
+                    seen[w] = true
+                    table.insert(ways, w)
+                end
             end
         end
 
@@ -335,8 +370,9 @@ local function run_interact_collect()
         end
     end
 
-    print("[✔] Interact Collect ejecutado.")
+    print("[✔] Auto-Collect finalizado: TODOS los cofres procesados.")
 end
+
 
 -- Botones y UI
 local y = 540
