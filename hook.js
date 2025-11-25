@@ -9,14 +9,14 @@ send("Mensaje desde hook.js");  // Esto debería llegar al loader
 
 const MODULE      = "wwm.exe";
 const HOTKEY_VK   = 0x31; // key '1'
-const TEST_PATH   = "C:\\temp\\Where Winds Meet\\Scripts\\gm_menu_full.lua";
+const TEST_PATH   = "C:\\temp\\Where Winds Meet\\Scripts\\test.lua";
 
 /* ========= Injected Lua script (minimal loader) ========= */
 /*
  * This loader only does:
  *   - loadfile(TEST_PATH)
  *   - pcall(f)
- * The real code is only in gm_menu_full.lua.
+ * The real code is only in test.lua.
  */
 const LUA_CHUNK_SOURCE = `
 local path = [[${TEST_PATH}]]
@@ -27,7 +27,7 @@ if not f then
 else
   local ok, err2 = pcall(f)
   if not ok then
-    print("[inject] error in gm_menu_full.lua:", err2)
+    print("[inject] error in test.lua:", err2)
   end
 end
 `;
@@ -160,7 +160,7 @@ function injectOnState(L) {
     return;
   }
 
-  console.log("[+] Lua loader injected and executed successfully (gm_menu_full.lua loadfile+pcall).");
+  console.log("[+] Lua loader injected and executed successfully (test.lua loadfile+pcall).");
 }
 
 // Hook on lua_pcall: injection when the game executes Lua
