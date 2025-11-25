@@ -253,6 +253,21 @@ local function open_new_menu()
     end
 end
 
+-- Util: detecta nombres que parezcan cofres
+local function isChestName(name)
+    if not name then return false end
+    name = name:lower()
+    local patterns = {
+        "chest", "treasure", "box", "loot", "reward", "drop",
+        "ins_chest", "ins_treasure", "ins_box", "ins_reward",
+        "interactchest", "interact_treasure", "gacha", "rare_chest"
+    }
+    for _, p in ipairs(patterns) do
+        if name:find(p) then return true end
+    end
+    return false
+end
+
 -- Aquí insertaré el archivo completo con soporte para TODOS los tipos de cofres
 -- Reemplazaré SOLO la lógica de detección para que incluya:
 --  * InteractComEntity
@@ -373,7 +388,6 @@ function run_interact_collect()
     print("[✔] Auto-Collect finalizado: TODOS los cofres procesados.")
 end
 
-
 -- Botones y UI
 local y = 540
 local function row(label, func)
@@ -403,7 +417,7 @@ row("GM menu", function()
   open_new_menu()  -- Llama a la función para abrir el nuevo menú
 end)
 
-row("Auto-Collect", function()
+row("Auto-Collect (Cofres)", function()
     run_interact_collect()
 end)
 
@@ -417,3 +431,4 @@ btn_god:setTitleText("Godmode: " .. (_G.GM_GODMODE and "ON" or "OFF"))
 btn_onehit:setTitleText("One-Hit Kill: " .. (_G.GM_ONEHIT and "ON" or "OFF"))
 btn_stamina:setTitleText("Stamina Infinita: " .. (_G.GM_STAMINA and "ON" or "OFF"))
 return
+
