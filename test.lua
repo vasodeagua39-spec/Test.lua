@@ -294,10 +294,41 @@ end
 
 -- Función principal de auto-collect con detección universal de cofres
 function run_interact_collect()
-    print("[✔] Auto-Collect: buscando TODO tipo de cofres, cajas y recursos...")
+    print("[✔] Auto-Collect EXTENDIDO: cofres + recursos + drops + kill rewards")
 
-    pcall(function() mp:ride_skill_collect_nearby_collections(2000) end)
+    -------------------------------------------------------------------------
+    -- 1. RECURSOS NORMALES (plantas/minerales)
+    -------------------------------------------------------------------------
+    pcall(function()
+        mp:ride_skill_collect_nearby_collections(1500)
+    end)
 
+    -------------------------------------------------------------------------
+    -- 2. RECOMPENSAS DE ENEMIGOS MUERTOS (kill rewards)
+    -------------------------------------------------------------------------
+    pcall(function()
+        local rewards = mp:ride_skill_find_nearest_kill_reward(1500)
+        if rewards and #rewards > 0 then
+            mp:ride_skill_get_kill_reward(rewards)
+        end
+    end)
+
+    -------------------------------------------------------------------------
+    -- 3. DROPS DEL SUELO
+    -------------------------------------------------------------------------
+    pcall(function()
+        local drops = DropManager.get_nearby_drop_entities(1500)
+        if drops then
+            for _, eid in ipairs(drops) do
+                pcall(function() mp:pick_drop_item(eid) end)
+                pcall(function() mp:pick_reward_item(eid) end)
+            end
+        end
+    end)
+
+    -------------------------------------------------------------------------
+    -- 4. INTERACTUABLES: COFRES, PUERTAS, MISIONES
+    -------------------------------------------------------------------------
     local playerPos = mp:get_position()
     local entities = MEntityManager:GetAOIEntities()
     local targets = {}
@@ -306,46 +337,53 @@ function run_interact_collect()
         local ent = entities[i]
 
         local ok, name = pcall(function() return ent:GetName() end)
-        if ok and name then
+        if ok and name and name:find("InteractComEntity") then
+
             local ok2, eno = pcall(function() return ent:GetEntityNo() end)
             local ok3, eid = pcall(function() return ent.entity_id end)
 
             if ok2 and ok3 then
-                -- Filtro extendido: InteractComEntity o cofres detectados
-                local isInteract = name:find("InteractComEntity") ~= nil
-                local isChest    = isChestName(name)
+                local luaEnt = G.space:get_entity(eid)
 
-                if isInteract or isChest then
-                    local luaEnt = G.space:get_entity(eid)
-                    if luaEnt then
-                        local ok4, comp = pcall(function() return luaEnt:get_interact_comp(eid) end)
-                        if ok4 and comp and comp.position then
-                            local dx = playerPos.x - comp.position[1]
-                            local dy = playerPos.y - comp.position[2]
-                            local dz = playerPos.z - comp.position[3]
-                            local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+                if luaEnt then
+                    local ok4, comp = pcall(function()
+                        return luaEnt:get_interact_comp(eid)
+                    end)
 
-                            table.insert(targets, {
-                                entity_no = eno,
-                                entity_id = eid,
-                                luaEnt = luaEnt,
-                                comp = comp,
-                                distance = dist,
-                                priority = isChest and 0 or 1 -- Cofres primero
-                            })
-                        end
+                    if ok4 and comp and comp.position then
+
+                        local dx = playerPos.x - comp.position[1]
+                        local dy = playerPos.y - comp.position[2]
+                        local dz = playerPos.z - comp.position[3]
+                        local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+
+                        local priority = tostring(eid):find("ins_entity") and 0 or 1
+
+                        table.insert(targets, {
+                            entity_no = eno,
+                            entity_id = eid,
+                            luaEnt = luaEnt,
+                            comp = comp,
+                            distance = dist,
+                            priority = priority
+                        })
                     end
                 end
             end
         end
     end
 
+    -- Ordenar: primero cofres importantes → luego más cercanos
     table.sort(targets, function(a, b)
         if a.priority ~= b.priority then return a.priority < b.priority end
         return a.distance < b.distance
     end)
 
+    -------------------------------------------------------------------------
+    -- 5. PROCESO DE INTERACCIÓN INTELIGENTE
+    -------------------------------------------------------------------------
     for _, t in ipairs(targets) do
+
         local ways = {}
         local seen = {}
 
@@ -355,10 +393,7 @@ function run_interact_collect()
 
         if ok_ways and possible then
             for _, w in ipairs(possible) do
-                if not seen[w] then
-                    seen[w] = true
-                    table.insert(ways, w)
-                end
+                if not seen[w] then seen[w] = true; table.insert(ways, w) end
             end
         end
 
@@ -366,6 +401,7 @@ function run_interact_collect()
         if t.comp.components then
             for cid, comp_data in pairs(t.comp.components) do
                 comp_id = cid
+
                 if comp_data.status_no and not seen[comp_data.status_no] then
                     seen[comp_data.status_no] = true
                     table.insert(ways, comp_data.status_no)
@@ -380,12 +416,64 @@ function run_interact_collect()
         if #ways > 0 then
             pcall(function() mp:set_interact_target_id(t.entity_id) end)
             for _, way in ipairs(ways) do
-                pcall(function() mp:trigger_active_interact(way, t.entity_id, nil, nil, comp_id) end)
+                pcall(function()
+                    mp:trigger_active_interact(way, t.entity_id, nil, nil, comp_id)
+                end)
             end
+
+            -- Último intento forzado (muy útil para cofres "rebeldes")
+            pcall(function() mp:trigger_active_interact() end)
         end
     end
 
-    print("[✔] Auto-Collect finalizado: TODOS los cofres procesados.")
+    print("[✔] Auto-Collect COMPLETO finalizado.")
+end
+
+local rhythm_enabled = rhythm_enabled or false
+
+-- Auto Perfect Rhythm Game (6-button)
+local function toggle_rhythm()
+    rhythm_enabled = not rhythm_enabled
+
+    local gm_instrument = package.loaded["hexm.client.debug.gm.gm_commands.gm_instrument"]
+    if gm_instrument and gm_instrument.enable_auto_rhythm_game then
+        pcall(function()
+            gm_instrument.enable_auto_rhythm_game(rhythm_enabled and 1 or 0)
+        end)
+    end
+
+    return rhythm_enabled
+end
+
+-- Instant Win Chess Minigame
+local function activate_chess_win()
+    local gm_wanfa = package.loaded["hexm.client.debug.gm.gm_commands.gm_wanfa"]
+    if gm_wanfa and gm_wanfa.gm_common_chess_fast_win then
+        pcall(function()
+            gm_wanfa.gm_common_chess_fast_win(1)
+        end)
+    end
+end
+
+-- Make Pitch Pot Circle Huge (Easy Mode)
+local function activate_pitch_pot_enlargement()
+    local gm_wanfa = package.loaded["hexm.client.debug.gm.gm_commands.gm_wanfa"]
+    if gm_wanfa and gm_wanfa.gm_scale_pitch_pot_circle then
+        pcall(function()
+            gm_wanfa.gm_scale_pitch_pot_circle(7)
+        end)
+    end
+end
+
+-- New wrapper function (optional grouping)
+function run_extra_minigames(mode)
+    if mode == "rhythm" then
+        return toggle_rhythm()
+    elseif mode == "chess" then
+        activate_chess_win()
+    elseif mode == "pitch" then
+        activate_pitch_pot_enlargement()
+    end
 end
 
 -- Botones y UI
@@ -421,6 +509,22 @@ row("Auto-Collect (Cofres)", function()
     run_interact_collect()
 end)
 
+-- 🔵 Rhythm Auto Perfect
+local btn_rhythm = row("NPC Rhythm Game", function(b)
+    local state = run_extra_minigames("rhythm")
+    b:setTitleText("NPC Rhythm Game: " .. (state and "ON" or "OFF"))
+end)
+
+-- ♟ Chess Instant Win
+local btn_chess = row("Chess Instant Win", function(b)
+    run_extra_minigames("chess")
+end)
+
+-- 🎯 Pitch Pot Easy Mode
+local btn_pitchpot = row("Pitch Pot Easy Mode", function(b)
+    run_extra_minigames("pitch")
+end)
+
 local btn_close = makeButton("CLOSE MENU", 210, 40)
 bind(btn_close, function()
     panel:removeFromParent()
@@ -430,5 +534,6 @@ end)
 btn_god:setTitleText("Godmode: " .. (_G.GM_GODMODE and "ON" or "OFF"))
 btn_onehit:setTitleText("One-Hit Kill: " .. (_G.GM_ONEHIT and "ON" or "OFF"))
 btn_stamina:setTitleText("Stamina Infinita: " .. (_G.GM_STAMINA and "ON" or "OFF"))
+-- Inicializar texto del botón de ritmo
+btn_rhythm:setTitleText("NPC Rhythm Game: " .. (rhythm_enabled and "ON" or "OFF"))
 return
-
